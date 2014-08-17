@@ -49,13 +49,13 @@ type testPointFloat struct {
 }
 
 func TestSurfaceValueAt(t *testing.T) {
-	bound := NewBound(3, 0, 3, 0)
-	surface := NewSurface(bound, 4, 4)
+	bound := NewBound(4, 0, 3, 0)
+	surface := NewSurface(bound, 5, 4)
 
-	surface.Grid[1][1] = 0
-	surface.Grid[2][1] = 1
-	surface.Grid[1][2] = 2
-	surface.Grid[2][2] = 3
+	surface.setAt(1, 1, 0)
+	surface.setAt(2, 1, 1)
+	surface.setAt(1, 2, 2)
+	surface.setAt(2, 2, 3)
 
 	tests := []testPointFloat{
 		{&Point{1, 1}, 0}, {&Point{2, 1}, 1}, {&Point{1, 2}, 2}, {&Point{2, 2}, 3},
@@ -81,12 +81,18 @@ type testPointPoint struct {
 }
 
 func TestSurfaceGradientAt(t *testing.T) {
-	bound := NewBound(2, 0, 2, 0)
-	surface := NewSurface(bound, 3, 3)
+	bound := NewBound(2, 0, 3, 0)
+	surface := NewSurface(bound, 3, 4)
 
-	surface.Grid[0] = []float64{0, 1, 2}
-	surface.Grid[1] = []float64{5, 4, 3}
-	surface.Grid[2] = []float64{7, 7, 7}
+	surface.setAt(0, 0, 0)
+	surface.setAt(0, 1, 1)
+	surface.setAt(0, 2, 2)
+	surface.setAt(1, 0, 5)
+	surface.setAt(1, 1, 4)
+	surface.setAt(1, 2, 3)
+	surface.setAt(2, 0, 7)
+	surface.setAt(2, 1, 7)
+	surface.setAt(2, 2, 7)
 
 	// super simple octave code
 	/*
@@ -156,14 +162,14 @@ func TestSurfaceWriteOffFile(t *testing.T) {
 	bound := NewBound(3, 0, 3, 0)
 	surface := NewSurface(bound, 4, 4)
 
-	surface.Grid[1][1] = 0
-	surface.Grid[2][1] = 1
-	surface.Grid[1][2] = 2
-	surface.Grid[2][2] = 3
+	surface.setAt(1, 1, 0)
+	surface.setAt(1, 2, 1)
+	surface.setAt(2, 1, 2)
+	surface.setAt(2, 2, 3)
 
 	expected := "OFF\n16 5 0\n0.00000000 0.00000000 0.00000000\n0.00000000 1.00000000 0.00000000\n0.00000000 2.00000000 0.00000000\n0.00000000 3.00000000 0.00000000\n"
-	expected += "1.00000000 0.00000000 0.00000000\n1.00000000 1.00000000 1.00000000\n1.00000000 2.00000000 3.00000000\n1.00000000 3.00000000 0.00000000\n"
-	expected += "2.00000000 0.00000000 0.00000000\n2.00000000 1.00000000 0.00000000\n2.00000000 2.00000000 2.00000000\n2.00000000 3.00000000 0.00000000\n"
+	expected += "1.00000000 0.00000000 0.00000000\n1.00000000 1.00000000 0.00000000\n1.00000000 2.00000000 1.00000000\n1.00000000 3.00000000 0.00000000\n"
+	expected += "2.00000000 0.00000000 0.00000000\n2.00000000 1.00000000 2.00000000\n2.00000000 2.00000000 3.00000000\n2.00000000 3.00000000 0.00000000\n"
 	expected += "3.00000000 0.00000000 0.00000000\n3.00000000 1.00000000 0.00000000\n3.00000000 2.00000000 0.00000000\n3.00000000 3.00000000 0.00000000\n"
 	expected += "4 0 1 5 4\n4 2 3 7 6\n4 5 6 10 9\n4 8 9 13 12\n4 10 11 15 14\n"
 
@@ -177,4 +183,27 @@ func TestSurfaceWriteOffFile(t *testing.T) {
 
 func areaPointsDifferent(a, b *Point, delta float64) bool {
 	return math.Abs(a[0]-b[0]) > delta || math.Abs(a[1]-b[1]) > delta
+}
+
+func TestSetAt(t *testing.T) {
+	bound := NewBound(3, 0, 3, 0)
+	surface := NewSurface(bound, 4, 4)
+
+	tests := []testPointFloat{{&Point{1, 1}, 0}, {&Point{1, 2}, 1}, {&Point{2, 1}, 2}, {&Point{2, 2}, 3}}
+
+	for i, test := range tests {
+		surface.setAt(int(test.P.X()), int(test.P.Y()), test.A)
+		if v := surface.ValueAt(test.P); v != test.A {
+			t.Errorf("surface, setAt (%d) got %f, expected %f", i, v, test.A)
+		}
+	}
+}
+
+// setAt is weird helper function used to wrap my head around the tests. See TestSetAt.
+func (s *Surface) setAt(x, y int, value float64) {
+	if x >= s.Width || y >= s.Height {
+		panic("geo: x, y outside of grid range")
+	}
+
+	s.Grid[s.Height-y-1][x] = value
 }

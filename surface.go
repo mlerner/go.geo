@@ -12,8 +12,11 @@ type Surface struct {
 	bound         *Bound
 	Width, Height int
 
-	// represents the underlying data, as [x][y]
-	// where x in [0:Width] and y in [0:Height]
+	// represents the underlying data, as [y][x],
+	// the same as regular matrix notiations [row][column] with [0][0] being the top left.
+	// This attribute should only be used for bulk loading data from images or something
+	// similar that's represented in row-major with [0][0] being the top left,
+	// otherwise use .SetAt(x, y)
 	Grid [][]float64 // x,y
 }
 
@@ -27,11 +30,11 @@ func NewSurface(bound *Bound, width, height int) *Surface {
 		Height: height,
 	}
 
-	s.Grid = make([][]float64, width)
+	s.Grid = make([][]float64, height)
 	points := make([]float64, width*height)
 
 	for i := range s.Grid {
-		s.Grid[i], points = points[:height], points[height:]
+		s.Grid[i], points = points[:width], points[width:]
 	}
 
 	return s
@@ -39,7 +42,7 @@ func NewSurface(bound *Bound, width, height int) *Surface {
 
 // Bound returns the same bound given at creation time.
 func (s *Surface) Bound() *Bound {
-	return s.bound
+	return s.bound.Clone()
 }
 
 // PointAt returns the point, in the bound, corresponding to
@@ -59,7 +62,6 @@ func (s *Surface) PointAt(x, y int) *Point {
 
 // ValueAt returns the bi-linearly interpolated value for
 // the given point. Returns 0 if the point is out of surface bounds
-// TODO: cleanup and optimize this code
 func (s *Surface) ValueAt(point *Point) float64 {
 	if !s.bound.Contains(point) {
 		return 0
@@ -78,8 +80,8 @@ func (s *Surface) ValueAt(point *Point) float64 {
 		yi1 = limit
 	}
 
-	w1 := s.Grid[xi][yi]*(1-w) + s.Grid[xi1][yi]*w
-	w2 := s.Grid[xi][yi1]*(1-w) + s.Grid[xi1][yi1]*w
+	w1 := s.Grid[yi][xi]*(1-w) + s.Grid[yi][xi1]*w
+	w2 := s.Grid[yi1][xi]*(1-w) + s.Grid[yi1][xi1]*w
 
 	return w1*(1-h) + w2*h
 }
@@ -107,13 +109,13 @@ func (s *Surface) GradientAt(point *Point) *Point {
 		deltaY = 1.0
 	}
 
-	u1 := s.Grid[xi][yi]*(1-deltaX) + s.Grid[xi1][yi]*deltaX
-	u2 := s.Grid[xi][yi1]*(1-deltaX) + s.Grid[xi1][yi1]*deltaX
+	u1 := s.Grid[yi][xi]*(1-deltaX) + s.Grid[yi][xi1]*deltaX
+	u2 := s.Grid[yi1][xi]*(1-deltaX) + s.Grid[yi1][xi1]*deltaX
 
-	w1 := (1 - deltaY) * (s.Grid[xi1][yi] - s.Grid[xi][yi])
-	w2 := deltaY * (s.Grid[xi1][yi1] - s.Grid[xi][yi1])
+	w1 := (1 - deltaY) * (s.Grid[yi][xi1] - s.Grid[yi][xi])
+	w2 := deltaY * (s.Grid[yi1][xi1] - s.Grid[yi1][xi])
 
-	return NewPoint((w1+w2)/s.gridBoxWidth(), (u2-u1)/s.gridBoxHeight())
+	return NewPoint((w1+w2)/s.gridBoxWidth(), (u1-u2)/s.gridBoxHeight())
 }
 
 // WriteOffFile writes an Object File Format representation of
@@ -142,8 +144,8 @@ func (s *Surface) WriteOffFile(w io.Writer) {
 	for i = 0; i < s.Width; i++ {
 		for j = 0; j < s.Height; j++ {
 			p := s.PointAt(i, j)
-			// weirdness is to things will be colored correctly in meshlab 1.3.2-OS X
-			w.Write([]byte(fmt.Sprintf("%.8f %.8f %.8f\n", p[0], p[1], s.Grid[(s.Width-1)-i][j])))
+			// weirdness is so things will be colored correctly in meshlab 1.3.2-OS X
+			w.Write([]byte(fmt.Sprintf("%.8f %.8f %.8f\n", p.X(), p.Y(), s.ValueAt(p))))
 		}
 	}
 
@@ -162,7 +164,7 @@ func (s Surface) gridBoxHeight() float64 {
 
 func (s Surface) gridCoordinate(point *Point) (x, y int, deltaX, deltaY float64) {
 	w := (point[0] - s.bound.sw[0]) / s.gridBoxWidth()
-	h := (point[1] - s.bound.sw[1]) / s.gridBoxHeight()
+	h := (s.bound.ne[1] - point[1]) / s.gridBoxHeight()
 
 	x = int(math.Floor(w))
 	y = int(math.Floor(h))
