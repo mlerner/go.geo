@@ -331,6 +331,19 @@ func (p *Path) DistanceFrom(point *Point) float64 {
 	return math.Sqrt(p.SquaredDistanceFrom(point))
 }
 
+// GeoDistanceFrom computes an O(n) geo distance from the path. Loops over every
+// point to find the minimum distance.
+func (p *Path) GeoDistanceFrom(point *Point) float64 {
+	dist := math.Inf(1)
+
+	loopTo := len(p.points) - 1
+	for i := 0; i < loopTo; i++ {
+		dist = math.Min(p.points[i].GeoDistanceFrom(point), dist)
+	}
+
+	return dist
+}
+
 // SquaredDistanceFrom computes an O(n) minimum squared distance from the path.
 // Loops over every subline to find the minimum distance.
 func (p *Path) SquaredDistanceFrom(point *Point) float64 {
